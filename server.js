@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const Database = require('better-sqlite3');
+const fs = require('fs');
 const path = require('path');
 
 const app = express();
@@ -16,46 +16,93 @@ app.use(express.urlencoded({ limit: '20mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ==========================================
-// 1. PERSISTENT STORAGE (SQLite in WAL mode)
+// 1. ZERO-DEPENDENCY PERSISTENT STORAGE
+// Uses Node's built-in node:sqlite (Node 22+)
+// or falls back to atomic file storage.
 // ==========================================
-const db = new Database(path.join(__dirname, 'usage.db'));
-db.pragma('journal_mode = WAL');
+class PersistentStorage {
+    constructor() {
+        this.useSqlite = false;
+        try {
+            // Built-in to Node 22+ (no npm package or C++ compilation required)
+            const { DatabaseSync } = require('node:sqlite');
+            const dbPath = path.join(__dirname, 'usage.db');
+            this.db = new DatabaseSync(dbPath);
+            this.db.exec(`
+                CREATE TABLE IF NOT EXISTS token_usage (
+                    user_id TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    tokens_used INTEGER NOT NULL DEFAULT 0,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, model)
+                );
+            `);
+            this.stmtGet = this.db.prepare('SELECT model, tokens_used FROM token_usage WHERE user_id = ?');
+            this.stmtUpsert = this.db.prepare(`
+                INSERT INTO token_usage (user_id, model, tokens_used, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, model) DO UPDATE SET
+                    tokens_used = tokens_used + excluded.tokens_used,
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+            this.useSqlite = true;
+            console.log('📦 Storage Engine: Node built-in node:sqlite (usage.db)');
+        } catch (e) {
+            this.jsonPath = path.join(__dirname, 'usage.json');
+            this.data = {};
+            if (fs.existsSync(this.jsonPath)) {
+                try {
+                    this.data = JSON.parse(fs.readFileSync(this.jsonPath, 'utf8'));
+                } catch (parseErr) {
+                    this.data = {};
+                }
+            }
+            console.log('📦 Storage Engine: File-backed JSON store (usage.json)');
+        }
+    }
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS token_usage (
-    user_id TEXT NOT NULL,
-    model TEXT NOT NULL,
-    tokens_used INTEGER NOT NULL DEFAULT 0,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, model)
-  );
-  CREATE INDEX IF NOT EXISTS idx_user ON token_usage(user_id);
-`);
+    getUsage(userId) {
+        if (this.useSqlite) {
+            const rows = this.stmtGet.all(userId.toString());
+            const usage = { 'gemini-flash': 0, 'gemini-pro': 0 };
+            for (const r of rows) {
+                usage[r.model] = r.tokens_used;
+            }
+            return usage;
+        } else {
+            const user = this.data[userId.toString()] || {};
+            return {
+                'gemini-flash': user['gemini-flash'] || 0,
+                'gemini-pro': user['gemini-pro'] || 0
+            };
+        }
+    }
 
-const stmtGetUsage = db.prepare('SELECT model, tokens_used FROM token_usage WHERE user_id = ?');
-const stmtUpsertUsage = db.prepare(`
-  INSERT INTO token_usage (user_id, model, tokens_used, updated_at)
-  VALUES (@user_id, @model, @tokens_used, CURRENT_TIMESTAMP)
-  ON CONFLICT(user_id, model) DO UPDATE SET
-    tokens_used = tokens_used + excluded.tokens_used,
-    updated_at = CURRENT_TIMESTAMP
-`);
+    recordUsage(userId, model, tokens) {
+        const amount = Math.round(tokens);
+        if (this.useSqlite) {
+            this.stmtUpsert.run(userId.toString(), model, amount);
+        } else {
+            const id = userId.toString();
+            if (!this.data[id]) this.data[id] = {};
+            this.data[id][model] = (this.data[id][model] || 0) + amount;
+            try {
+                fs.writeFileSync(this.jsonPath, JSON.stringify(this.data, null, 2));
+            } catch (writeErr) {
+                console.error('Failed to save usage.json:', writeErr);
+            }
+        }
+    }
+}
+
+const storage = new PersistentStorage();
 
 function getUserUsage(userId) {
-    const rows = stmtGetUsage.all(userId.toString());
-    const usage = { 'gemini-flash': 0, 'gemini-pro': 0 };
-    for (const r of rows) {
-        usage[r.model] = r.tokens_used;
-    }
-    return usage;
+    return storage.getUsage(userId);
 }
 
 function recordTokenUsage(userId, model, tokens) {
-    stmtUpsertUsage.run({
-        user_id: userId.toString(),
-        model: model,
-        tokens_used: Math.round(tokens)
-    });
+    storage.recordUsage(userId, model, tokens);
 }
 
 // ==========================================
@@ -70,17 +117,17 @@ const TIER_CONFIG = {
     1: {
         name: 'Starter (Tier 1)',
         allowedModels: ['gemini-flash'],
-        limits: { 'gemini-flash': 100000 } // 100k tokens
+        limits: { 'gemini-flash': 100000 }
     },
     2: {
         name: 'Developer (Tier 2)',
         allowedModels: ['gemini-flash'],
-        limits: { 'gemini-flash': 500000 } // 500k tokens
+        limits: { 'gemini-flash': 500000 }
     },
     3: {
         name: 'Enterprise (Tier 3)',
         allowedModels: ['gemini-flash', 'gemini-pro'],
-        limits: { 'gemini-flash': 2000000, 'gemini-pro': 500000 } // 2M Flash, 500k Pro
+        limits: { 'gemini-flash': 2000000, 'gemini-pro': 500000 }
     }
 };
 
@@ -104,7 +151,6 @@ function authenticateToken(req, res, next) {
     }
 }
 
-// Instant token generation for UI testing
 app.post('/api/auth/demo-token', (req, res) => {
     const tier = parseInt(req.body.tier, 10) || 1;
     const userId = req.body.userId || `user_tier_${tier}`;
@@ -134,14 +180,14 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
 
         if (!GEMINI_API_KEY) {
             return res.status(500).json({
-                error: 'GEMINI_API_KEY is not configured in .env. Get a free API key at https://aistudio.google.com and add it to .env.'
+                error: 'GEMINI_API_KEY is missing in your .env file. Grab a free key at https://aistudio.google.com and paste it in .env.'
             });
         }
 
         const tierConfig = TIER_CONFIG[userTier];
         if (!tierConfig || !tierConfig.allowedModels.includes(model)) {
             return res.status(403).json({
-                error: `Tier ${userTier} (${tierConfig?.name || 'Unknown'}) is not authorized to use '${model}'. Please switch to an allowed model or upgrade your tier.`
+                error: `Tier ${userTier} (${tierConfig?.name || 'Unknown'}) is not authorized to use '${model}'. Upgrade your tier to use this model.`
             });
         }
 
@@ -156,7 +202,6 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         const actualGeminiModel = MODEL_MAPPING[model] || 'gemini-2.5-flash';
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${actualGeminiModel}:streamGenerateContent?alt=sse`;
 
-        // Format conversational contents for Gemini API
         const contents = [];
         if (Array.isArray(history) && history.length > 0) {
             for (const item of history) {
@@ -195,7 +240,6 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
             });
         }
 
-        // Set up SSE headers for client streaming
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
@@ -212,30 +256,22 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                 if (!line.startsWith('data: ')) continue;
                 try {
                     const parsed = JSON.parse(line.slice(6));
-                    
-                    // Extract streaming text chunk
                     const candidate = parsed.candidates?.[0];
                     const partText = candidate?.content?.parts?.[0]?.text;
                     if (partText) {
                         res.write(`data: ${JSON.stringify({ text: partText })}\n\n`);
                     }
-
-                    // Extract exact token counts from Gemini metadata
                     if (parsed.usageMetadata?.totalTokenCount) {
                         totalTokensReported = parsed.usageMetadata.totalTokenCount;
                     }
-                } catch (e) {
-                    // Skip malformed chunk
-                }
+                } catch (e) {}
             }
         }
 
-        // If Gemini provided exact token counts, record them in SQLite
         if (totalTokensReported) {
             recordTokenUsage(userId, model, totalTokensReported);
             console.log(`[Usage Recorded] User '${userId}' consumed ${totalTokensReported} tokens on ${model}.`);
         } else {
-            // Fallback estimation if usageMetadata was omitted
             const estimatedTokens = Math.max(10, Math.round(query.length / 4));
             recordTokenUsage(userId, model, estimatedTokens);
         }

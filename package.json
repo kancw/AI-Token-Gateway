@@ -1,14 +1,12 @@
 {
   "name": "omni-ai-gateway",
   "version": "1.0.0",
-  "description": "Lightweight reverse proxy and token cost governance engine for LLMs with tiered quotas and SSE streaming.",
+  "description": "Lightweight reverse proxy and token cost governance engine for Google Gemini with tiered quotas and SSE streaming.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "generate-token": "node scripts/generate-token.js"
+    "start": "node server.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
