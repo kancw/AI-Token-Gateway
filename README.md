@@ -75,6 +75,9 @@ Enterprises adopting Large Language Models (LLMs) face three operational challen
 * Enforces hard spending limits, returning `HTTP 429 Too Many Requests` when a user exceeds their tier quota.
 * Masks sensitive upstream API credentials on the server, ensuring client-side requests never access secret keys.
 
+### 5. Multi-Tenant User Isolation & Concurrency:
+* Partitions token balances and rate limits per user_id using a composite primary key in SQLite, allowing concurrent multi-user read/write operations without state pollution or lock contention.
+
 ---
 
 ## Technical Specifications & Performance Profile
