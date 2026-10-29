@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OmniGateway — Google Gemini AI Proxy & Token Governance</title>
+  
+  <!-- Markdown & Code Styling -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --danger: #ef4444;
+      --success: #10b981;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      overflow: hidden;
+    }
+
+    /* Toast Alert */
+    .toast {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: var(--danger);
+      color: #ffffff;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 9999;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      display: none;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+
+    /* Left Sidebar */
+    .sidebar {
+      width: 300px;
+      height: 100%;
+      background-color: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .brand-badge {
+      font-size: 11px;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .card {
+      background-color: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+    }
+
+    .tier-select {
+      width: 100%;
+      padding: 10px 12px;
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+    }
+    .tier-select:focus { border-color: var(--accent); }
+
+    .token-bar-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .token-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .token-labels strong { color: var(--text-main); }
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), #38bdf8);
+      transition: width 0.3s ease;
+    }
+
+    .btn-new-chat {
+      background-color: var(--accent);
+      color: #0f172a;
+      border: none;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-new-chat:hover {
+      background-color: var(--accent-hover);
+      color: #ffffff;
+    }
+
+    .jwt-inspector {
+      font-size: 11px;
+      color: var(--text-muted);
+      cursor: pointer;
+      text-decoration: underline;
+      margin-top: auto;
+    }
+
+    /* Main Chat Layout */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      background-color: var(--bg-primary);
+    }
+
+    .header-bar {
+      height: 60px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      background-color: var(--bg-secondary);
+    }
+
+    .model-selector-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .model-selector-group label {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .model-dropdown {
+      padding: 8px 14px;
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+    }
+    .model-dropdown option:disabled {
+      color: #64748b;
+      background-color: #1e293b;
+    }
+
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .message-row {
+      display: flex;
+      gap: 14px;
+      max-width: 85%;
+    }
+    .message-row.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+    .message-row.assistant {
+      align-self: flex-start;
+    }
+
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+      font-weight: 700;
+    }
+    .avatar.user { background: var(--accent); color: #0f172a; }
+    .avatar.assistant { background: var(--bg-tertiary); border: 1px solid var(--border); }
+
+    .bubble {
+      padding: 14px 18px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+    .bubble.user {
+      background-color: var(--accent);
+      color: #0f172a;
+      font-weight: 500;
+    }
+    .bubble.assistant {
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+    }
+
+    /* Markdown inside assistant bubble */
+    .bubble.assistant p { margin-bottom: 10px; }
+    .bubble.assistant p:last-child { margin-bottom: 0; }
+    .bubble.assistant ul, .bubble.assistant ol { margin: 8px 0 10px 20px; }
+    .bubble.assistant pre {
+      background: #090d16;
+      border: 1px solid #1e293b;
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 10px 0;
+      position: relative;
+    }
+    .bubble.assistant code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+    }
+
+    /* Quick Starter Suggestions */
+    .quick-starters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .starter-pill {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      color: var(--accent);
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .starter-pill:hover {
+      background: var(--bg-tertiary);
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    /* Input Footer */
+    .input-footer {
+      padding: 18px 24px;
+      background-color: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .chat-input {
+      flex: 1;
+      padding: 14px 18px;
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-main);
+      font-size: 14px;
+      outline: none;
+    }
+    .chat-input:focus { border-color: var(--accent); }
+
+    .btn-send {
+      padding: 14px 24px;
+      background-color: var(--accent);
+      color: #0f172a;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-send:hover { background-color: var(--accent-hover); color: #fff; }
+    .btn-send:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">Alert Message</div>
+
+  <!-- Left Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span>⚡ OmniGateway</span>
+      <span class="brand-badge">Gemini</span>
+    </div>
+
+    <button class="btn-new-chat" onclick="resetChat()">+ New Conversation</button>
+
+    <!-- Profile & RBAC Switcher -->
+    <div class="card">
+      <div class="card-title">User Subscription Tier (RBAC)</div>
+      <select id="tier-select" class="tier-select" onchange="switchTier(this.value)">
+        <option value="1">Tier 1: Starter (100k tokens)</option>
+        <option value="2">Tier 2: Developer (500k tokens)</option>
+        <option value="3" selected>Tier 3: Enterprise (Gemini Pro + Flash)</option>
+      </select>
+    </div>
+
+    <!-- Live Token Quota Tracker -->
+    <div class="card">
+      <div class="card-title">Token Allocation (SQLite)</div>
+      <div class="token-bar-container">
+        <div class="token-labels">
+          <span>Used: <strong id="lbl-used">0</strong></span>
+          <span>Limit: <strong id="lbl-limit">--</strong></span>
+        </div>
+        <div class="progress-track">
+          <div id="progress-bar" class="progress-fill"></div>
+        </div>
+        <div class="token-labels" style="font-size: 11px;">
+          <span>Remaining: <strong id="lbl-remaining">--</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="jwt-inspector" onclick="inspectJwt()">Inspect Bearer JWT Payload</div>
+  </aside>
+
+  <!-- Main Chat Window -->
+  <main class="main">
+    <header class="header-bar">
+      <div class="model-selector-group">
+        <label for="model-select">Target Model:</label>
+        <select id="model-select" class="model-dropdown">
+          <option value="gemini-flash">Google Gemini 2.5 Flash</option>
+          <option value="gemini-pro">Google Gemini 2.5 Pro (Tier 3 Only)</option>
+        </select>
+      </div>
+      <div style="font-size: 12px; color: var(--text-muted);">
+        Connected to <strong>Google AI Studio (Free Tier)</strong>
+      </div>
+    </header>
+
+    <div class="messages-container" id="messages-container"></div>
+
+    <footer class="input-footer">
+      <input type="text" id="user-input" class="chat-input" placeholder="Type a message or prompt..." onkeypress="if(event.key==='Enter') sendMessage()">
+      <button class="btn-send" id="btn-send" onclick="sendMessage()">Send</button>
+    </footer>
+  </main>
+
+  <script>
+    let currentToken = '';
+    let currentTier = 3;
+    let conversationHistory = [];
+    let isStreaming = false;
+
+    // Toast alert
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.innerText = message;
+      toast.style.display = 'block';
+      requestAnimationFrame(() => toast.style.opacity = '1');
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.style.display = 'none', 250);
+      }, 3500);
+    }
+
+    // Switch tier dynamically (fetches a signed JWT from gateway)
+    async function switchTier(tierNum) {
+      currentTier = parseInt(tierNum, 10);
+      try {
+        const res = await fetch('/api/auth/demo-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tier: currentTier, userId: `user_tier_${currentTier}` })
+        });
+        const data = await res.json();
+        currentToken = data.token;
+        updateModelDropdownAvailability();
+        await updateTokenUsageDisplay();
+        showToast(`Switched to ${data.tier_name}`);
+      } catch (err) {
+        showToast('Error issuing demo JWT');
+      }
+    }
+
+    // Restrict dropdown options based on current tier
+    function updateModelDropdownAvailability() {
+      const select = document.getElementById('model-select');
+      const proOption = select.querySelector('option[value="gemini-pro"]');
+      if (currentTier < 3) {
+        proOption.disabled = true;
+        proOption.innerText = 'Google Gemini 2.5 Pro (Locked - Tier 3 Only)';
+        select.value = 'gemini-flash';
+      } else {
+        proOption.disabled = false;
+        proOption.innerText = 'Google Gemini 2.5 Pro';
+      }
+    }
+
+    // Fetch token balance from SQLite database
+    async function updateTokenUsageDisplay() {
+      if (!currentToken) return;
+      const selectedModel = document.getElementById('model-select').value;
+      try {
+        const res = await fetch('/api/usage', {
+          headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const m = data.usage[selectedModel] || { used: 0, limit: 100000, remaining: 100000 };
+
+        document.getElementById('lbl-used').innerText = formatNumber(m.used);
+        document.getElementById('lbl-limit').innerText = formatNumber(m.limit);
+        document.getElementById('lbl-remaining').innerText = formatNumber(m.remaining);
+
+        const pct = Math.min(100, Math.round((m.used / (m.limit || 1)) * 100));
+        document.getElementById('progress-bar').style.width = pct + '%';
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function formatNumber(num) {
+      if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+      if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+      return num.toLocaleString();
+    }
+
+    // Reset Chat Window
+    function resetChat() {
+      conversationHistory = [];
+      const container = document.getElementById('messages-container');
+      container.innerHTML = `
+        <div class="message-row assistant">
+          <div class="avatar assistant">⚡</div>
+          <div class="bubble assistant">
+            <h3 style="margin-bottom: 6px; color: var(--accent);">OmniGateway Live Demo</h3>
+            <p>Welcome! This interface interacts directly with the Google Gemini API through our Node.js & SQLite reverse proxy.</p>
+            <p><strong>Try one of these quick prompts:</strong></p>
+            <div class="quick-starters">
+              <button class="starter-pill" onclick="sendPrompt('Explain what a reverse proxy does in software engineering in 3 bullet points.')">Explain reverse proxies</button>
+              <button class="starter-pill" onclick="sendPrompt('Write a clean JavaScript function to compute Fibonacci numbers using recursion with memoization.')">Write JavaScript code</button>
+              <button class="starter-pill" onclick="sendPrompt('Compare Gemini 2.5 Flash and Gemini 2.5 Pro in terms of speed, cost, and use cases.')">Compare Flash vs Pro</button>
+            </div>
+          </div>
+        </div>
+      `;
+      updateTokenUsageDisplay();
+    }
+
+    function sendPrompt(text) {
+      document.getElementById('user-input').value = text;
+      sendMessage();
+    }
+
+    // Send Message
+    async function sendMessage() {
+      const input = document.getElementById('user-input');
+      const text = input.value.trim();
+      if (!text || isStreaming) return;
+
+      input.value = '';
+      appendMessage(text, 'user');
+
+      const assistantBubble = appendMessage('...', 'assistant');
+      const selectedModel = document.getElementById('model-select').value;
+      const btnSend = document.getElementById('btn-send');
+
+      isStreaming = true;
+      btnSend.disabled = true;
+
+      try {
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${currentToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            query: text,
+            model: selectedModel,
+            history: conversationHistory
+          })
+        });
+
+        if (response.status === 429 || response.status === 403) {
+          const err = await response.json().catch(() => ({}));
+          showToast(err.error || 'Access denied or quota limit reached.');
+          assistantBubble.parentElement.remove();
+          return;
+        }
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullResponse = '';
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.text) {
+                  fullResponse += data.text;
+                  assistantBubble.innerHTML = marked.parse(fullResponse);
+                }
+              } catch (e) {}
+            }
+          }
+        }
+
+        // Save into conversational memory
+        conversationHistory.push({ role: 'user', text: text });
+        conversationHistory.push({ role: 'model', text: fullResponse });
+
+        await updateTokenUsageDisplay();
+
+      } catch (err) {
+        assistantBubble.innerHTML = `<span style="color: var(--danger);">❌ Error: ${err.message}</span>`;
+      } finally {
+        isStreaming = false;
+        btnSend.disabled = false;
+        const container = document.getElementById('messages-container');
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    function appendMessage(text, role) {
+      const container = document.getElementById('messages-container');
+      const row = document.createElement('div');
+      row.className = `message-row ${role}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = `avatar ${role}`;
+      avatar.innerText = role === 'user' ? 'U' : '⚡';
+
+      const bubble = document.createElement('div');
+      bubble.className = `bubble ${role}`;
+      bubble.innerHTML = role === 'user' ? text : marked.parse(text);
+
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+      container.appendChild(row);
+      container.scrollTop = container.scrollHeight;
+
+      return bubble;
+    }
+
+    function inspectJwt() {
+      if (!currentToken) return alert('No token active');
+      try {
+        const payload = JSON.parse(atob(currentToken.split('.')[1]));
+        alert(`Bearer JWT Payload:\n\n${JSON.stringify(payload, null, 2)}\n\nThis token is sent via the 'Authorization: Bearer' HTTP header on every request.`);
+      } catch (e) {
+        alert(currentToken);
+      }
+    }
+
+    // Initialize on load
+    window.onload = async () => {
+      await switchTier(3);
+      resetChat();
+      document.getElementById('model-select').addEventListener('change', updateTokenUsageDisplay);
+    };
+  </script>
+</body>
+</html>
