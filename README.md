@@ -1,30 +1,60 @@
 # OmniGateway — Enterprise AI Proxy & Token Governance Engine
 
-[![Runtime: Node.js 26](https://img.shields.io/badge/Runtime-Node.js_26-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org)
-[![Framework: Express](https://img.shields.io/badge/Framework-Express_4-000000.svg?logo=express&logoColor=white)](https://expressjs.com)
-[![Engine: Google Gemini](https://img.shields.io/badge/Model-Google_Gemini_API-4285F4.svg?logo=google&logoColor=white)](https://ai.google.dev)
-[![Database: SQLite WAL](https://img.shields.io/badge/Storage-SQLite_(WAL_Engine)-003B57.svg?logo=sqlite&logoColor=white)](https://sqlite.org)
-[![Security: JWT RBAC](https://img.shields.io/badge/Auth-JWT_Bearer_RBAC-FF6C37.svg)](https://jwt.io)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-
 An enterprise-grade reverse proxy and cost governance middleware engineered to secure, monitor, and enforce budget allocations across foundation model endpoints. Built with native asynchronous streaming, cryptographic role-based access control (RBAC), and atomic local storage persistence.
-
----
 
 ## Engineering Context & Problem Statement
 
 Enterprises adopting Large Language Models (LLMs) face three operational challenges:
+
 1. **Unpredictable Billing**: Direct client-to-API calls lead to runaway token usage without department spending caps.
 2. **Credential Exposure**: Exposing master provider API keys to client browsers introduces major attack vectors.
 3. **Audit Invisibility**: Foundation model providers do not provide real-time, per-user token allocation tracking.
 
 **OmniGateway** resolves these bottlenecks by acting as an intermediary governance layer. It inspects incoming traffic, validates cryptographic user tiers, gates access to expensive flagship models, and records consumption telemetry in real time.
 
----
+## Quick Start Guide
+
+Follow these steps to spin up the OmniGateway proxy and the accompanying dashboard on your local machine:
+
+### 1. Prerequisites & Installation
+
+Ensure you have **Node.js v22 or higher** installed (required for the native `node:sqlite` engine).
+Clone the repository and install the minimal runtime dependencies:
+
+```bash
+npm install
+```
+
+*(If you are setting this up manually without a `package.json`, run: `npm install express cors jsonwebtoken dotenv`)*
+
+### 2. Environment Configuration
+
+Create a `.env` file in the root directory of the project. You must supply a Google Gemini API key (you can grab a free one from [Google AI Studio](https://aistudio.google.com)).
+
+```env
+PORT=3000
+JWT_SECRET=your_secure_random_string_here
+GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+### 3. Start the Server
+
+Run the core reverse proxy application:
+
+```bash
+node server.js
+```
+
+You should see console output confirming the SQLite database is connected and the server is listening.
+
+### 4. Access the Dashboard
+
+Open your web browser and navigate to:
+**http://localhost:3000**
 
 ## System Architecture
 
-```
+```text
 [ Client Application / Web UI ]
                │
                ▼  1. Bearer JWT Authentication
@@ -47,8 +77,6 @@ Enterprises adopting Large Language Models (LLMs) face three operational challen
 │ 9. Atomic Usage Commit via 'ON CONFLICT DO UPDATE'     │
 └────────────────────────────────────────────────────────┘
 ```
-
----
 
 ## Key Technical Features
 
@@ -75,11 +103,6 @@ Enterprises adopting Large Language Models (LLMs) face three operational challen
 * Enforces hard spending limits, returning `HTTP 429 Too Many Requests` when a user exceeds their tier quota.
 * Masks sensitive upstream API credentials on the server, ensuring client-side requests never access secret keys.
 
-### 5. Multi-Tenant User Isolation & Concurrency:
-* Partitions token balances and rate limits per user_id using a composite primary key in SQLite, allowing concurrent multi-user read/write operations without state pollution or lock contention.
-
----
-
 ## Technical Specifications & Performance Profile
 
 | Metric | Measured Baseline | Technical Rationale |
@@ -89,8 +112,6 @@ Enterprises adopting Large Language Models (LLMs) face three operational challen
 | **Storage Concurrency** | Zero lock contention | SQLite WAL mode isolates reader and writer threads |
 | **Runtime Dependencies** | 4 pure-JS packages | Zero native C++ compilation required (`node-gyp` free) |
 | **Memory Footprint** | `~34 MB RSS` | Efficient garbage collection with zero memory leaks |
-
----
 
 ## API Architecture
 
@@ -124,11 +145,9 @@ Retrieves live quota telemetry and token usage breakdowns for the authenticated 
   }
   ```
 
----
-
 ## Project Structure
 
-```
+```text
 ├── server.js               # Core reverse proxy, SSE pipeline & SQLite persistence
 ├── usage.db                # High-concurrency local token ledger (WAL mode)
 ├── public/
@@ -137,8 +156,6 @@ Retrieves live quota telemetry and token usage breakdowns for the authenticated 
 ├── .gitignore              # Protects environment secrets and local database files
 └── README.md               # Technical project documentation & architectural analysis
 ```
-
----
 
 ## Author
 **Kan Cheuk Wang**  
