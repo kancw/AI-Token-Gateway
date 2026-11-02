@@ -109,8 +109,8 @@ function recordTokenUsage(userId, model, tokens) {
 // 2. TIER CONFIGURATION & MODEL MAPPING
 // ==========================================
 const MODEL_MAPPING = {
-    'gemini-flash': process.env.GEMINI_MODEL_FLASH || 'gemini-2.5-flash',
-    'gemini-pro': process.env.GEMINI_MODEL_PRO || 'gemini-2.5-pro'
+    'gemini-flash': process.env.GEMINI_MODEL_FLASH_LITE || 'gemini-3.5-flash-lite',
+    'gemini-pro': process.env.GEMINI_MODEL_FLASH || 'gemini-3.8-flash'
 };
 
 const TIER_CONFIG = {
@@ -199,7 +199,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
             });
         }
 
-        const actualGeminiModel = MODEL_MAPPING[model] || 'gemini-2.5-flash';
+        const actualGeminiModel = MODEL_MAPPING[model] || 'gemini-3.5-flash-lite';
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${actualGeminiModel}:streamGenerateContent?alt=sse`;
 
         const contents = [];

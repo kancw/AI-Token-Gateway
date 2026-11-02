@@ -68,7 +68,7 @@ Open your web browser and navigate to:
                            │
                            ▼  5. Upstream Dispatch (x-goog-api-key)
              [ Google Gemini Foundation Models ]
-              (Gemini 2.5 Flash / Gemini 2.5 Pro)
+              (Gemini 3.5 Flash Lite / Gemini 3.8 Flash)
                            │
                            ▼  6. Raw Chunked TCP Stream
 ┌────────────────────────────────────────────────────────┐
@@ -85,7 +85,7 @@ Open your web browser and navigate to:
 * Enforces subscription tier permissions dynamically:
   * **Tier 1 (Starter)**: Access restricted to `gemini-flash` with a 100,000 monthly token cap.
   * **Tier 2 (Developer)**: Standard `gemini-flash` allocation with a 500,000 token ceiling.
-  * **Tier 3 (Enterprise)**: Full access to flagship `gemini-pro` and high-throughput `gemini-flash` up to 2.5M tokens.
+  * **Tier 3 (Enterprise)**: Full access to `gemini-pro` (Gemini 3.8 Flash) and `gemini-flash` (Gemini 3.5 Flash Lite) up to 2.5M tokens.
 * Rejects unauthorized model invocation attempts with `HTTP 403 Forbidden`.
 
 ### 2. Zero-Latency Server-Sent Events (SSE) Reassembly
